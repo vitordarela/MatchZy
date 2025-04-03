@@ -1901,64 +1901,76 @@ namespace MatchZy
 
         public async Task UploadFileAsync(string? filePath, string fileUploadURL, string headerKey, string headerValue, long matchId, int mapNumber, int roundNumber)
         {
-            if (filePath == null || fileUploadURL == "")
+            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(fileUploadURL))
             {
                 Log($"[UploadFileAsync] Not able to upload the file, either filePath or fileUploadURL is not set. filePath: {filePath} fileUploadURL: {fileUploadURL}");
                 return;
             }
 
-            try
+            const int maxRetries = 3;
+            int attempt = 0;
+
+            while (attempt < maxRetries)
             {
-                using var httpClient = new HttpClient();
-                Log($"[UploadFileAsync] Going to upload the file on {fileUploadURL}. Complete path: {filePath}");
-
-                if (!File.Exists(filePath))
+                try
                 {
-                    Log($"[UploadFileAsync ERROR] File not found: {filePath}");
-                    return;
+                    attempt++;
+
+                    Log($"[UploadFileAsync] Attempt {attempt} to upload the file on {fileUploadURL}. Complete path: {filePath}");
+
+                    if (!File.Exists(filePath))
+                    {
+                        Log($"[UploadFileAsync ERROR] File not found: {filePath}");
+                        return;
+                    }
+
+                    using var httpClient = new HttpClient
+                    {
+                        Timeout = TimeSpan.FromMinutes(10)
+                    };
+
+                    using var fileStream = File.OpenRead(filePath);
+                    using var content = new StreamContent(fileStream);
+
+                    content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+                    content.Headers.Add("MatchZy-FileName", Path.GetFileName(filePath));
+                    content.Headers.Add("MatchZy-MatchId", matchId.ToString());
+                    content.Headers.Add("MatchZy-MapNumber", mapNumber.ToString());
+                    content.Headers.Add("MatchZy-RoundNumber", roundNumber.ToString());
+
+                    content.Headers.Add("Get5-FileName", Path.GetFileName(filePath));
+                    content.Headers.Add("Get5-MatchId", matchId.ToString());
+                    content.Headers.Add("Get5-MapNumber", mapNumber.ToString());
+                    content.Headers.Add("Get5-RoundNumber", roundNumber.ToString());
+
+                    if (!string.IsNullOrEmpty(headerKey) && !string.IsNullOrEmpty(headerValue))
+                    {
+                        httpClient.DefaultRequestHeaders.Add(headerKey, headerValue);
+                    }
+
+                    var response = await httpClient.PostAsync(fileUploadURL, content);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        Log($"[UploadFileAsync] File upload successful on attempt {attempt}. matchId: {matchId}, mapNumber: {mapNumber}, fileName: {Path.GetFileName(filePath)}.");
+                        return;
+                    }
+                    else
+                    {
+                        Log($"[UploadFileAsync WARNING] Attempt {attempt} failed. Status code: {response.StatusCode}. Response: {await response.Content.ReadAsStringAsync()}");
+                    }
                 }
-
-                using FileStream fileStream = File.OpenRead(filePath);
-
-                byte[] fileContent = new byte[fileStream.Length];
-                await fileStream.ReadAsync(fileContent, 0, (int)fileStream.Length);
-
-                using ByteArrayContent content = new(fileContent);
-                content.Headers.Add("Content-Type", "application/octet-stream");
-
-                content.Headers.Add("MatchZy-FileName", Path.GetFileName(filePath));
-                content.Headers.Add("MatchZy-MatchId", matchId.ToString());
-                content.Headers.Add("MatchZy-MapNumber", mapNumber.ToString());
-                content.Headers.Add("MatchZy-RoundNumber", roundNumber.ToString());
-
-                // For Get5 Panel
-                content.Headers.Add("Get5-FileName", Path.GetFileName(filePath));
-                content.Headers.Add("Get5-MatchId", matchId.ToString());
-                content.Headers.Add("Get5-MapNumber", mapNumber.ToString());
-                content.Headers.Add("Get5-RoundNumber", roundNumber.ToString());
-
-
-                if (!string.IsNullOrEmpty(headerKey) && !string.IsNullOrEmpty(headerValue))
+                catch (Exception e)
                 {
-                    httpClient.DefaultRequestHeaders.Add(headerKey, headerValue);
-                }
-
-                HttpResponseMessage response = await httpClient.PostAsync(fileUploadURL, content);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    Log($"[UploadFileAsync] File upload successful for matchId: {matchId} mapNumber: {mapNumber} fileName: {Path.GetFileName(filePath)}.");
-                }
-                else
-                {
-                    Log($"[UploadFileAsync ERROR] Failed to upload file. Status code: {response.StatusCode} Response: {await response.Content.ReadAsStringAsync()}");
+                    Log($"[UploadFileAsync ERROR] Attempt {attempt} failed with exception: {e.Message} | Inner: {e.InnerException?.Message}");
                 }
             }
-            catch (Exception e)
-            {
-                Log($"[UploadFileAsync FATAL] An error occurred: {e.Message}");
-            }
+
+            Log($"[UploadFileAsync FATAL] All {maxRetries} attempts failed to upload file: {filePath}");
         }
+
+
 
         public bool HandlePlayerWhitelist(CCSPlayerController player, string steamId)
         {
