@@ -103,6 +103,14 @@ public class MatchZyPlayerDisconnectedEvent : MatchZyMatchEvent
     }
 }
 
+public class MatchZyMatchCanceled : MatchZyMatchEvent
+{
+
+    public MatchZyMatchCanceled() : base("match_canceled")
+    {
+    }
+}
+
 public class MatchZySeriesStartedEvent : MatchZyMatchEvent
 {
     [JsonPropertyName("team1")]

@@ -60,6 +60,7 @@ namespace MatchZy
 
         // Timers
         public CounterStrikeSharp.API.Modules.Timers.Timer? unreadyPlayerMessageTimer = null;
+        public CounterStrikeSharp.API.Modules.Timers.Timer? unreadyPlayerToMatch = null;
         public CounterStrikeSharp.API.Modules.Timers.Timer? sideSelectionMessageTimer = null;
         public CounterStrikeSharp.API.Modules.Timers.Timer? pausedStateTimer = null;
 

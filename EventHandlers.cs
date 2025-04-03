@@ -42,7 +42,8 @@ public partial class MatchZy
                 connectedPlayers++;
                 if (readyAvailable && !matchStarted)
                 {
-                    playerReadyStatus[player.UserId.Value] = false;
+                    playerReadyStatus[player.UserId.Value] = true;
+
                 }
                 else
                 {

@@ -22,6 +22,8 @@ namespace MatchZy
         public const string liveCfgPath = "MatchZy/live.cfg";
         public const string liveWingmanCfgPath = "MatchZy/live_wingman.cfg";
 
+        private DateTime? matchEndTime = null;
+
         private void PrintToAllChat(string message)
         {
             Server.PrintToChatAll($"{chatPrefix} {message}");
@@ -173,7 +175,8 @@ namespace MatchZy
                 if (isMatchSetup)
                 {
                     // Server.PrintToChatAll($"{chatPrefix} Current ready players: {ChatColors.Green}{countOfReadyPlayers}{ChatColors.Default}");
-                    PrintToAllChat(Localizer["matchzy.utility.readyplayers", countOfReadyPlayers]);
+                    //PrintToAllChat(Localizer["matchzy.utility.readyplayers", countOfReadyPlayers]);
+                    CheckLiveRequired();
                 }
                 else
                 {
@@ -181,6 +184,56 @@ namespace MatchZy
                     PrintToAllChat(Localizer["matchzy.utility.minimumreadyplayers", minimumReadyRequired, countOfReadyPlayers]);
                 }
             }
+        }
+
+        private string GetRemainingTime()
+        {
+            TimeSpan remaining = matchEndTime.Value - DateTime.Now;
+            return remaining > TimeSpan.Zero ? remaining.ToString(@"mm\:ss") : "00:00";
+        }
+
+        private void CheckConnectedPlayerToStartMatch()
+        {
+            if (!isWarmup || matchStarted) return;
+
+            if (matchEndTime == null)
+            {
+                matchEndTime = DateTime.Now.AddMinutes(5); // Gera o prazo de 5 minutos.
+            }
+
+            var remainingTime = GetRemainingTime();
+
+            // Verifica se o prazo expirou.
+            if (remainingTime == "00:00")
+            {
+                PrintToAllChat(Localizer["matchzy.utility.unreadyplayersCancelMatch"]);
+                CancelMatch(); // Cancela a partida se o tempo expirou.
+                return;
+            }
+
+            PrintToAllChat(Localizer["matchzy.utility.unreadyplayersTimer", remainingTime]);
+        }
+
+        private void CancelMatch()
+        {
+            PrintToAllChat(Localizer["matchzy.utility.cancelingMatch", 4]);
+            PrintToAllChat(Localizer["matchzy.utility.cancelingMatch", 3]);
+            PrintToAllChat(Localizer["matchzy.utility.cancelingMatch", 2]);
+            PrintToAllChat(Localizer["matchzy.utility.cancelingMatch", 1]);
+            AddTimer(5, () =>
+            {
+                var matchZyMatchCanceled = new MatchZyMatchCanceled
+                {
+                    MatchId = liveMatchId
+                };
+
+                Task.Run(async () =>
+                {
+                    await SendEventAsync(matchZyMatchCanceled);
+                });
+
+            });
+            
         }
 
         private void SendPausedStateMessage()
@@ -232,6 +285,11 @@ namespace MatchZy
             unreadyPlayerMessageTimer?.Kill();
             unreadyPlayerMessageTimer = null;
             unreadyPlayerMessageTimer ??= AddTimer(chatTimerDelay, SendUnreadyPlayersMessage, TimerFlags.REPEAT);
+
+            unreadyPlayerToMatch?.Kill();
+            unreadyPlayerToMatch = null;
+            unreadyPlayerToMatch ??= AddTimer(30, CheckConnectedPlayerToStartMatch, TimerFlags.REPEAT);
+
             isWarmup = true;
             ExecWarmupCfg();
         }
@@ -683,6 +741,7 @@ namespace MatchZy
 
         private void CheckLiveRequired()
         {
+            Console.WriteLine("Chamou o CheckLiveRequired");
             if (!readyAvailable || matchStarted) return;
 
             // Todo: Implement a same ready system for both pug and match
@@ -693,6 +752,7 @@ namespace MatchZy
                 if (IsTeamsReady() && IsSpectatorsReady())
                 {
                     liveRequired = true;
+                    unreadyPlayerToMatch?.Kill();
                 }
             }
             else if (minimumReadyRequired == 0)

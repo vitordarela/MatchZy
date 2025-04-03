@@ -115,6 +115,9 @@
   "matchzy.sleep.sleepwhenmatchstared": "O Modo Sleep não pode ser iniciado quando uma partida já foi iniciada!",
 
   "matchzy.utility.unreadyplayers": "Jogadores não prontos: {0}. Por favor, digite .ready para ficar pronto! {1}",
+  "matchzy.utility.unreadyplayersCancelMatch": "A partida esta sendo {red}CANCELADA{default}! Pois um ou mais jogadores não conectaram.",
+  "matchzy.utility.unreadyplayersTimer": "Aguardando os jogadores se connectarem na partida. Tempo Restante: {green}{0}{default}",
+  "matchzy.utility.cancelingMatch": "Cancelando a partida em {red}{0}{default} segundos....",
   "matchzy.utility.readyplayers": "Jogadores prontos atuais: {green}{0}{default}",
   "matchzy.utility.minimumreadyplayers": "Número mínimo de jogadores prontos necessário {green}{0}{default}, jogadores prontos atuais: {green}{1}{default}",
   "matchzy.utility.matchstarted": "O mapa não pode ser alterado após o início da partida!",
