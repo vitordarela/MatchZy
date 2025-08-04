@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using System.Drawing;
+using System.IO.Compression;
 
 
 namespace MatchZy
@@ -1910,17 +1911,35 @@ namespace MatchZy
             const int maxRetries = 3;
             int attempt = 0;
 
+            // Caminho temporário para o zip
+            var zipFilePath = Path.ChangeExtension(filePath, ".zip");
+
+            try
+            {
+                // Gera o zip temporário
+                Log($"[UploadFileAsync] Compressing demo file to zip: {zipFilePath}");
+                using (FileStream zipToOpen = new(zipFilePath, FileMode.Create))
+                using (ZipArchive archive = new(zipToOpen, ZipArchiveMode.Create))
+                {
+                    archive.CreateEntryFromFile(filePath, Path.GetFileName(filePath), CompressionLevel.Optimal);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"[UploadFileAsync ERROR] Failed to compress file: {ex.Message}");
+                return;
+            }
+
             while (attempt < maxRetries)
             {
                 try
                 {
                     attempt++;
+                    Log($"[UploadFileAsync] Attempt {attempt} to upload the file on {fileUploadURL}. Zip path: {zipFilePath}");
 
-                    Log($"[UploadFileAsync] Attempt {attempt} to upload the file on {fileUploadURL}. Complete path: {filePath}");
-
-                    if (!File.Exists(filePath))
+                    if (!File.Exists(zipFilePath))
                     {
-                        Log($"[UploadFileAsync ERROR] File not found: {filePath}");
+                        Log($"[UploadFileAsync ERROR] Zip file not found: {zipFilePath}");
                         return;
                     }
 
@@ -1929,17 +1948,19 @@ namespace MatchZy
                         Timeout = TimeSpan.FromMinutes(10)
                     };
 
-                    using var fileStream = File.OpenRead(filePath);
-                    using var content = new StreamContent(fileStream);
-
+                    using var zipStream = File.OpenRead(zipFilePath);
+                    using var content = new StreamContent(zipStream);
                     content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
-                    content.Headers.Add("MatchZy-FileName", Path.GetFileName(filePath));
+                    var zipFileName = Path.GetFileName(zipFilePath);
+                    var originalFileName = Path.GetFileName(filePath);
+
+                    content.Headers.Add("MatchZy-FileName", zipFileName);
                     content.Headers.Add("MatchZy-MatchId", matchId.ToString());
                     content.Headers.Add("MatchZy-MapNumber", mapNumber.ToString());
                     content.Headers.Add("MatchZy-RoundNumber", roundNumber.ToString());
 
-                    content.Headers.Add("Get5-FileName", Path.GetFileName(filePath));
+                    content.Headers.Add("Get5-FileName", zipFileName);
                     content.Headers.Add("Get5-MatchId", matchId.ToString());
                     content.Headers.Add("Get5-MapNumber", mapNumber.ToString());
                     content.Headers.Add("Get5-RoundNumber", roundNumber.ToString());
@@ -1953,7 +1974,11 @@ namespace MatchZy
 
                     if (response.IsSuccessStatusCode)
                     {
-                        Log($"[UploadFileAsync] File upload successful on attempt {attempt}. matchId: {matchId}, mapNumber: {mapNumber}, fileName: {Path.GetFileName(filePath)}.");
+                        Log($"[UploadFileAsync] File upload successful on attempt {attempt}. matchId: {matchId}, mapNumber: {mapNumber}, fileName: {zipFileName}.");
+                        if (File.Exists(zipFilePath))
+                        {
+                            File.Delete(zipFilePath);
+                        }
                         return;
                     }
                     else
@@ -1965,6 +1990,8 @@ namespace MatchZy
                 {
                     Log($"[UploadFileAsync ERROR] Attempt {attempt} failed with exception: {e.Message} | Inner: {e.InnerException?.Message}");
                 }
+
+                await Task.Delay(TimeSpan.FromSeconds(2 * attempt));
             }
 
             Log($"[UploadFileAsync FATAL] All {maxRetries} attempts failed to upload file: {filePath}");
